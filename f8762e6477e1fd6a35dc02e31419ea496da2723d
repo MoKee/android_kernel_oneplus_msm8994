@@ -1,0 +1,50 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "bfb3d3c7_b71df2be",
+        "filename": "arch/arm64/configs/mokee_tocino_defconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 740,
+      "author": {
+        "id": 1203
+      },
+      "writtenOn": "2015-09-06T08:35:28Z",
+      "side": 1,
+      "message": "Need to enable this.",
+      "range": {
+        "startLine": 740,
+        "startChar": 2,
+        "endLine": 740,
+        "endChar": 13
+      },
+      "revId": "f8762e6477e1fd6a35dc02e31419ea496da2723d",
+      "serverId": "83d63960-fecf-4fd1-a7f6-e01518638a62",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "bfb3d3c7_577836f7",
+        "filename": "arch/arm64/configs/mokee_tocino_defconfig",
+        "patchSetId": 1
+      },
+      "lineNbr": 1376,
+      "author": {
+        "id": 1203
+      },
+      "writtenOn": "2015-09-06T08:35:28Z",
+      "side": 1,
+      "message": "Need to enable.",
+      "range": {
+        "startLine": 1376,
+        "startChar": 0,
+        "endLine": 1376,
+        "endChar": 12
+      },
+      "revId": "f8762e6477e1fd6a35dc02e31419ea496da2723d",
+      "serverId": "83d63960-fecf-4fd1-a7f6-e01518638a62",
+      "unresolved": false
+    }
+  ]
+}
