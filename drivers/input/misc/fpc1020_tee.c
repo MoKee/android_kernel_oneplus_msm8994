@@ -37,6 +37,7 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
+#include <linux/proc_fs.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
@@ -138,6 +139,8 @@ struct fpc1020_data {
 	bool irq_enabled;
 	spinlock_t irq_lock;
 };
+
+static struct fpc1020_data *fpc1020_g = NULL;
 
 static int fpc1020_request_named_gpio(struct fpc1020_data *fpc1020,
 		const char *label, int *gpio)
@@ -869,11 +872,10 @@ static ssize_t wakeup_enable_set(struct device *dev,
 }
 static DEVICE_ATTR(wakeup_enable, S_IWUSR, NULL, wakeup_enable_set);
 
-static ssize_t proximity_state_set(struct device *dev,
-                                   struct device_attribute *attr,
-                                   const char *buf, size_t count)
+static ssize_t disable_write(struct file *file, const char __user *buf,
+                             size_t count, loff_t *lo)
 {
-	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
+	struct fpc1020_data *fpc1020 = fpc1020_g;
 	int rc, val;
 
 	rc = kstrtoint(buf, 10, &val);
@@ -888,7 +890,11 @@ static ssize_t proximity_state_set(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(proximity_state, S_IWUSR, NULL, proximity_state_set);
+static const struct file_operations proc_disable = {
+	.write = disable_write,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+};
 
 static struct attribute *attributes[] = {
 	//&dev_attr_hw_reset.attr,
@@ -1052,6 +1058,7 @@ static int fpc1020_probe(struct spi_device *spi)
 	unsigned long irqf;
 	struct device_node *np = dev->of_node;
 	u32 val;
+	struct proc_dir_entry *procdir;
 	struct fpc1020_data *fpc1020 = devm_kzalloc(dev, sizeof(*fpc1020),
 			GFP_KERNEL);
 	if (!fpc1020) {
@@ -1062,6 +1069,8 @@ static int fpc1020_probe(struct spi_device *spi)
 	}
 
 	printk(KERN_INFO "%s\n", __func__);
+
+	fpc1020_g = fpc1020;
 
 	fpc1020->dev = dev;
 	dev_set_drvdata(dev, fpc1020);
@@ -1247,6 +1256,12 @@ static int fpc1020_probe(struct spi_device *spi)
     {
         push_component_info(FINGERPRINTS,"fpc1150" , gpio_get_value(fpc1020->vendor_gpio)?"(FPC)DT" : "(FPC)CT");
     }
+
+	// init procfs
+	procdir = proc_mkdir("fingerprint", NULL);
+
+	proc_create_data("disable", S_IWUSR, procdir,
+		&proc_disable, NULL);
 
 	dev_info(dev, "%s: ok\n", __func__);
 exit:
