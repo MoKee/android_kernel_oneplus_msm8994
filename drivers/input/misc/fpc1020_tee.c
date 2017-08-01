@@ -63,8 +63,6 @@
 /* Unused key value to avoid interfering with active keys */
 #define KEY_FINGERPRINT 0x2ee
 
-#define ONEPLUS_EDIT  //Onplus modify for msm8996 platform and 15801 HW
-
 static const char * const pctl_names[] = {
 	"fpc1020_spi_active",
 	"fpc1020_reset_reset",
@@ -81,19 +79,13 @@ struct vreg_config {
 	unsigned long vmax;
 	int ua_load;
 };
-#ifndef ONEPLUS_EDIT
-static const struct vreg_config const vreg_conf[] = {
-	{ "vdd_ana", 1800000UL, 1800000UL, 6000, },
-	{ "vcc_spi", 1800000UL, 1800000UL, 10, },
-	{ "vdd_io", 1800000UL, 1800000UL, 6000, },
-};
-#else
+
 static const struct vreg_config const vreg_conf[] = {
 	{ "vdd_ana", 2850000UL, 2850000UL, 6000, },
 	{ "vcc_spi", 1800000UL, 1800000UL, 10, },
 	{ "vdd_io", 1800000UL, 1800000UL, 6000, },
 };
-#endif
+
 struct fpc1020_data {
 	struct device *dev;
 	struct spi_device *spi;
@@ -102,8 +94,8 @@ struct fpc1020_data {
 	struct clk *iface_clk;
 	struct clk *core_clk;
 	struct regulator *vreg[ARRAY_SIZE(vreg_conf)];
-	
-    struct wake_lock ttw_wl;
+
+	struct wake_lock ttw_wl;
 	int irq_gpio;
 	int cs0_gpio;
 	int cs1_gpio;
@@ -112,7 +104,7 @@ struct fpc1020_data {
 	int qup_id;
 	struct mutex lock;
 	bool prepared;
-	
+
 	bool wakeup_enabled;
 	bool clocks_enabled;
 	bool clocks_suspended;
@@ -121,18 +113,17 @@ struct fpc1020_data {
 	struct pinctrl_state   *gpio_state_active;
 	struct pinctrl_state   *gpio_state_suspend;
 
-	#ifdef ONEPLUS_EDIT
-    int EN_VDD_gpio;
-    int id0_gpio;
-    int id1_gpio;
-    int vendor_gpio;
-    int fp2050_gpio;
-    struct input_dev	*input_dev;
-    int screen_state;//1: on 0:off
-	#endif
-	#if defined(CONFIG_FB)
+	int EN_VDD_gpio;
+	int id0_gpio;
+	int id1_gpio;
+	int vendor_gpio;
+	int fp2050_gpio;
+	struct input_dev	*input_dev;
+	int screen_state;//1: on 0:off
+
+#if defined(CONFIG_FB)
 	struct notifier_block fb_notif;
-    #endif
+#endif
 	struct work_struct pm_work;
 };
 
@@ -156,108 +147,6 @@ static int fpc1020_request_named_gpio(struct fpc1020_data *fpc1020,
 	dev_info(dev, "%s - gpio: %d\n", label, *gpio);
 	return 0;
 }
-#ifndef ONEPLUS_EDIT
-/* -------------------------------------------------------------------- */
-static int fpc1020_pinctrl_init(struct fpc1020_data *fpc1020)
-{
-	int ret = 0;
-	struct device *dev = fpc1020->dev;
-
-	fpc1020->ts_pinctrl = devm_pinctrl_get(dev);
-	if (IS_ERR_OR_NULL(fpc1020->ts_pinctrl)) {
-		dev_err(dev, "Target does not use pinctrl\n");
-		ret = PTR_ERR(fpc1020->ts_pinctrl);
-		goto err;
-	}
-
-	fpc1020->gpio_state_active =
-		pinctrl_lookup_state(fpc1020->ts_pinctrl, "pmx_fp_active");
-	if (IS_ERR_OR_NULL(fpc1020->gpio_state_active)) {
-		dev_err(dev, "Cannot get active pinstate\n");
-		ret = PTR_ERR(fpc1020->gpio_state_active);
-		goto err;
-	}
-
-	fpc1020->gpio_state_suspend =
-		pinctrl_lookup_state(fpc1020->ts_pinctrl, "pmx_fp_suspend");
-	if (IS_ERR_OR_NULL(fpc1020->gpio_state_suspend)) {
-		dev_err(dev, "Cannot get sleep pinstate\n");
-		ret = PTR_ERR(fpc1020->gpio_state_suspend);
-		goto err;
-	}
-
-	return 0;
-err:
-	fpc1020->ts_pinctrl = NULL;
-	fpc1020->gpio_state_active = NULL;
-	fpc1020->gpio_state_suspend = NULL;
-	return ret;
-}
-
-/* -------------------------------------------------------------------- */
-static int fpc1020_pinctrl_select(struct fpc1020_data *fpc1020, bool on)
-{
-	int ret = 0;
-	struct pinctrl_state *pins_state;
-	struct device *dev = fpc1020->dev;
-
-	pins_state = on ? fpc1020->gpio_state_active : fpc1020->gpio_state_suspend;
-	if (!IS_ERR_OR_NULL(pins_state)) {
-		ret = pinctrl_select_state(fpc1020->ts_pinctrl, pins_state);
-		if (ret) {
-			dev_err(dev, "can not set %s pins\n",
-				on ? "pmx_ts_active" : "pmx_ts_suspend");
-			return ret;
-		}
-	} else {
-		dev_err(dev, "not a valid '%s' pinstate\n",
-			on ? "pmx_ts_active" : "pmx_ts_suspend");
-	}
-
-	return ret;
-}
-#endif
-/*
-static int hw_reset(struct  fpc1020_data *fpc1020)
-{
-	int irq_gpio;
-	struct device *dev = fpc1020->dev;
-
-	int rc = select_pin_ctl(fpc1020, "fpc1020_reset_active");
-	if (rc)
-		goto exit;
-	usleep_range(FPC1020_RESET_HIGH1_US, FPC1020_RESET_HIGH1_US + 100);
-
-	rc = select_pin_ctl(fpc1020, "fpc1020_reset_reset");
-	if (rc)
-		goto exit;
-	usleep_range(FPC1020_RESET_LOW_US, FPC1020_RESET_LOW_US + 100);
-
-	rc = select_pin_ctl(fpc1020, "fpc1020_reset_active");
-	if (rc)
-		goto exit;
-	usleep_range(FPC1020_RESET_HIGH1_US, FPC1020_RESET_HIGH1_US + 100);
-
-	irq_gpio = gpio_get_value(fpc1020->irq_gpio);
-	dev_info(dev, "IRQ after reset %d\n", irq_gpio);
-exit:
-	return rc;
-}
-
-static ssize_t hw_reset_set(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t count)
-{
-	int rc;
-	struct  fpc1020_data *fpc1020 = dev_get_drvdata(dev);
-
-	if (!strncmp(buf, "reset", strlen("reset")))
-		rc = hw_reset(fpc1020);
-	else
-		return -EINVAL;
-	return rc ? rc : count;
-}
-static DEVICE_ATTR(hw_reset, S_IWUSR, NULL, hw_reset_set);
-*/
 
 /**
  * sysf node to check the interrupt status of the sensor, the interrupt
@@ -271,7 +160,6 @@ static ssize_t irq_get(struct device* device,
 	int irq = gpio_get_value(fpc1020->irq_gpio);
 	return scnprintf(buffer, PAGE_SIZE, "%i\n", irq);
 }
-
 
 /**
  * writing to the irq node will just drop a printk message
@@ -287,37 +175,21 @@ static ssize_t irq_ack(struct device* device,
 }
 static DEVICE_ATTR(irq, S_IRUSR | S_IWUSR, irq_get, irq_ack);
 
-#ifdef VENDOR_EDIT //WayneChang, 2015/12/02, add for key to abs, simulate key in abs through virtual key system
-extern bool virtual_key_enable;
-#endif
-
 static ssize_t report_home_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct  fpc1020_data *fpc1020 = dev_get_drvdata(dev);
-        
-	if (!strncmp(buf, "down", strlen("down")))
-	{
-#ifdef VENDOR_EDIT //WayneChang, 2015/12/02, add for key to abs, simulate key in abs through virtual key system
-		if(!virtual_key_enable){
-	 		input_report_key(fpc1020->input_dev,
-							KEY_HOME, 1);
-			input_sync(fpc1020->input_dev);
-		}
-#endif
-	}
-	else if (!strncmp(buf, "up", strlen("up")))
-	{
-#ifdef VENDOR_EDIT //WayneChang, 2015/12/02, add for key to abs, simulate key in abs through virtual key system
-		if(!virtual_key_enable){
-			input_report_key(fpc1020->input_dev,
-							KEY_HOME, 0);
-			input_sync(fpc1020->input_dev);
-		}
-#endif
-	}
-	else
+	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
+
+	if (!strncmp(buf, "down", strlen("down"))) {
+		input_report_key(fpc1020->input_dev, KEY_HOME, 1);
+		input_sync(fpc1020->input_dev);
+	} else if (!strncmp(buf, "up", strlen("up"))) {
+		input_report_key(fpc1020->input_dev, KEY_HOME, 0);
+		input_sync(fpc1020->input_dev);
+	} else {
 		return -EINVAL;
+	}
+
 	return count;
 }
 static DEVICE_ATTR(report_home, S_IWUSR, NULL, report_home_set);
@@ -325,13 +197,9 @@ static DEVICE_ATTR(report_home, S_IWUSR, NULL, report_home_set);
 static ssize_t update_info_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
-	//struct  fpc1020_data *fpc1020 = dev_get_drvdata(dev);
-
-	if (!strncmp(buf, "n", strlen("n")))
-	{
+	if (!strncmp(buf, "n", strlen("n"))) {
 		push_component_info(FINGERPRINTS,"N/A" , "N/A");
 	}
-
 	return count;
 }
 static DEVICE_ATTR(update_info, S_IWUSR, NULL, update_info_set);
@@ -343,15 +211,12 @@ static ssize_t screen_state_get(struct device* device,
 	struct fpc1020_data* fpc1020 = dev_get_drvdata(device);
 	return scnprintf(buffer, PAGE_SIZE, "%i\n", fpc1020->screen_state);
 }
-
 static DEVICE_ATTR(screen_state, S_IRUSR , screen_state_get, NULL);
 
-
-static int vreg_setup(struct fpc1020_data *fpc1020, const char *name,
-	bool enable)
+static int vreg_setup(struct fpc1020_data *fpc1020,
+			     const char *name, bool enable)
 {
 	size_t i;
-	int rc;
 	struct regulator *vreg;
 	struct device *dev = fpc1020->dev;
 
@@ -364,52 +229,8 @@ static int vreg_setup(struct fpc1020_data *fpc1020, const char *name,
 	return -EINVAL;
 found:
 	vreg = fpc1020->vreg[i];
-	#ifdef ONEPLUS_EDIT
-	//if(i == 2)
-	{
-	    dev_err(dev, "ignor Regulator %s :enable(%d)\n", name,enable);
-	    return 0;
-	}
-	#endif
-	if (enable) {
-		if (!vreg) {
-			vreg = regulator_get(dev, name);
-			if (!vreg) {
-				dev_err(dev, "Unable to get  %s\n", name);
-				return -ENODEV;
-			}
-		}
-		if (regulator_count_voltages(vreg) > 0) {
-			rc = regulator_set_voltage(vreg, vreg_conf[i].vmin,
-					vreg_conf[i].vmax);
-			if (rc)
-				dev_err(dev,
-					"Unable to set voltage on %s, %d\n",
-					name, rc);
-		}
-		rc = regulator_set_optimum_mode(vreg, vreg_conf[i].ua_load);
-		if (rc < 0)
-			dev_err(dev, "Unable to set current on %s, %d\n",
-					name, rc);
-		rc = regulator_enable(vreg);
-		if (rc) {
-			dev_err(dev, "error enabling %s: %d\n", name, rc);
-			regulator_put(vreg);
-			vreg = NULL;
-		}
-		fpc1020->vreg[i] = vreg;
-	} else {
-		if (vreg) {
-			if (regulator_is_enabled(vreg)) {
-				regulator_disable(vreg);
-				dev_dbg(dev, "disabled %s\n", name);
-			}
-			regulator_put(vreg);
-			fpc1020->vreg[i] = NULL;
-		}
-		rc = 0;
-	}
-	return rc;
+	dev_err(dev, "ignor Regulator %s :enable(%d)\n", name, enable);
+	return 0;
 }
 
 /**
@@ -482,7 +303,6 @@ static int set_clks(struct fpc1020_data *fpc1020, bool enable)
 	if (enable) {
 		rc = clk_set_rate(fpc1020->core_clk,
 				fpc1020->spi->max_speed_hz);
-        //dev_err(fpc1020->dev, "%s :rate(%d)\n", __func__,fpc1020->spi->max_speed_hz);
 		if (rc) {
 			dev_err(fpc1020->dev,
 					"%s: Error setting clk_rate: %u, %d\n",
@@ -536,40 +356,25 @@ static int select_pin_ctl(struct fpc1020_data *fpc1020, const char *name)
 		const char *n = pctl_names[i];
 		dev_err(dev, "i=%zu  , n='%s', pass in:'%s'\n",i, n, name);
 		if (!strncmp(n, name, strlen(n))) {
-		#ifdef ONEPLUS_EDIT
-		    if(i == 1)
-		    {
-		        gpio_direction_output(fpc1020->rst_gpio,0);
-		        rc = 0;
-		        goto exit;
-		    }
-		    else if(i == 2)
-		    {
-		        gpio_direction_output(fpc1020->rst_gpio,1);
-		        rc = 0;
-		        goto exit;
-		    }
-		    else
-		    {
-		        dev_err(dev, "%s : Ignor '%s'\n", n, name);
-                rc = 0;
-		        goto exit;
-		    }
-		#else
-			rc = pinctrl_select_state(fpc1020->fingerprint_pinctrl,
-					fpc1020->pinctrl_state[i]);
-			if (rc)
-				dev_err(dev, "cannot select '%s'\n", name);
-			else
-				dev_dbg(dev, "Selected '%s'\n", name);
-            goto exit;
-        #endif
+			if (i == 1) {
+				gpio_direction_output(fpc1020->rst_gpio,0);
+				rc = 0;
+				goto exit;
+			} else if (i == 2) {
+				gpio_direction_output(fpc1020->rst_gpio,1);
+				rc = 0;
+				goto exit;
+			} else {
+				dev_err(dev, "%s : Ignor '%s'\n", n, name);
+				rc = 0;
+				goto exit;
+			}
 		}
 	}
 
 	rc = -EINVAL;
 	dev_err(dev, "%s:'%s' not found\n", __func__, name);
-	
+
 exit:
 	return rc;
 }
@@ -841,12 +646,10 @@ static ssize_t wakeup_enable_set(struct device *dev,
 static DEVICE_ATTR(wakeup_enable, S_IWUSR, NULL, wakeup_enable_set);
 
 static struct attribute *attributes[] = {
-	//&dev_attr_hw_reset.attr,
 	&dev_attr_irq.attr,
 	&dev_attr_report_home.attr,
 	&dev_attr_update_info.attr,
 	&dev_attr_screen_state.attr,
-	
 	&dev_attr_pinctl_set.attr,
 	&dev_attr_clk_enable.attr,//only use this one
 	&dev_attr_spi_owner.attr,
@@ -856,7 +659,6 @@ static struct attribute *attributes[] = {
 	&dev_attr_bus_lock.attr,
 	&dev_attr_hw_reset.attr,
 	&dev_attr_wakeup_enable.attr,
-	
 	NULL
 };
 
@@ -867,37 +669,31 @@ static const struct attribute_group attribute_group = {
 int fpc1020_input_init(struct fpc1020_data *fpc1020)
 {
 	int error = 0;
-
-
 	dev_dbg(fpc1020->dev, "%s\n", __func__);
 
 	fpc1020->input_dev = input_allocate_device();
 
 	if (!fpc1020->input_dev) {
 		dev_err(fpc1020->dev, "Input_allocate_device failed.\n");
-		error  = -ENOMEM;
+		return -ENOMEM;
 	}
 
-	if (!error) {
-		fpc1020->input_dev->name = "fpc1020";
+	fpc1020->input_dev->name = "fpc1020";
 
-		/* Set event bits according to what events we are generating */
-		set_bit(EV_KEY, fpc1020->input_dev->evbit);
+	/* Set event bits according to what events we are generating */
+	set_bit(EV_KEY, fpc1020->input_dev->evbit);
 
-        set_bit(KEY_POWER, fpc1020->input_dev->keybit);
-        set_bit(KEY_F2, fpc1020->input_dev->keybit);
-        set_bit(KEY_HOME, fpc1020->input_dev->keybit);
+	set_bit(KEY_POWER, fpc1020->input_dev->keybit);
+	set_bit(KEY_F2, fpc1020->input_dev->keybit);
+	set_bit(KEY_HOME, fpc1020->input_dev->keybit);
 	set_bit(KEY_FINGERPRINT, fpc1020->input_dev->keybit);
 
-		/* Register the input device */
-		error = input_register_device(fpc1020->input_dev);
-
-
-		if (error) {
-			dev_err(fpc1020->dev, "Input_register_device failed.\n");
-			input_free_device(fpc1020->input_dev);
-			fpc1020->input_dev = NULL;
-		}
+	/* Register the input device */
+	error = input_register_device(fpc1020->input_dev);
+	if (error) {
+		dev_err(fpc1020->dev, "Input_register_device failed.\n");
+		input_free_device(fpc1020->input_dev);
+		fpc1020->input_dev = NULL;
 	}
 
 	return error;
@@ -966,17 +762,13 @@ static int fb_notifier_callback(struct notifier_block *self, unsigned long event
 static irqreturn_t fpc1020_irq_handler(int irq, void *handle)
 {
 	struct fpc1020_data *fpc1020 = handle;
-	//dev_info(fpc1020->dev, "%s\n", __func__);
 
 	/* Make sure 'wakeup_enabled' is updated before using it
 	** since this is interrupt context (other thread...) */
 	smp_rmb();
-/*
-	if (fpc1020->wakeup_enabled ) {
-		wake_lock_timeout(&fpc1020->ttw_wl, msecs_to_jiffies(FPC_TTW_HOLD_TIME));
-	}
-*/
-	wake_lock_timeout(&fpc1020->ttw_wl, msecs_to_jiffies(FPC_TTW_HOLD_TIME));//changhua add for KeyguardUpdateMonitor: fingerprint acquired, grabbing fp wakelock
+
+	//changhua add for KeyguardUpdateMonitor: fingerprint acquired, grabbing fp wakelock
+	wake_lock_timeout(&fpc1020->ttw_wl, msecs_to_jiffies(FPC_TTW_HOLD_TIME));
 	sysfs_notify(&fpc1020->dev->kobj, NULL, dev_attr_irq.attr.name);
 
 	if (!fpc1020->screen_state) {
@@ -1017,52 +809,38 @@ static int fpc1020_probe(struct spi_device *spi)
 		rc = -EINVAL;
 		goto exit;
 	}
-	
+
 	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_1V8_EN",
 			&fpc1020->EN_VDD_gpio);
 	if (rc)
 		goto exit;
-    gpio_direction_output(fpc1020->EN_VDD_gpio,1);
+	gpio_direction_output(fpc1020->EN_VDD_gpio, 1);
 
 	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_irq",
 			&fpc1020->irq_gpio);
 	if (rc)
 		goto exit;
-	#ifdef ONEPLUS_EDIT
-    gpio_direction_input(fpc1020->irq_gpio);
-	#endif
-	#ifndef ONEPLUS_EDIT
-	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_cs0",
-			&fpc1020->cs0_gpio);
-	if (rc)
-		goto exit;	
-	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_cs1",
-			&fpc1020->cs1_gpio);
-	if (rc)
-		goto exit;
-	#endif
+	gpio_direction_input(fpc1020->irq_gpio);
+
 	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_rst",
 			&fpc1020->rst_gpio);
 	if (rc)
 		goto exit;
-    #ifdef ONEPLUS_EDIT
-    gpio_direction_output(fpc1020->rst_gpio,1);
-	#endif
+	gpio_direction_output(fpc1020->rst_gpio, 1);
 
-    rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_vendor",
+	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_vendor",
 			&fpc1020->vendor_gpio);
 	if (rc)
 		goto exit;
-    gpio_direction_input(fpc1020->vendor_gpio);
+	gpio_direction_input(fpc1020->vendor_gpio);
 
-    rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_fp2050",
+	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_fp2050",
 			&fpc1020->fp2050_gpio);
-    if(gpio_is_valid(fpc1020->fp2050_gpio))//only HW14 have fp2050
-    {
-        dev_err(dev, "%s: gpio_is_valid(fpc1020->fp2050_gpio)\n", __func__);
-        gpio_direction_input(fpc1020->fp2050_gpio);
-    }
-	
+	if (gpio_is_valid(fpc1020->fp2050_gpio)) {//only HW14 have fp2050
+		dev_err(dev, "%s: gpio_is_valid(fpc1020->fp2050_gpio)\n", __func__);
+		gpio_direction_input(fpc1020->fp2050_gpio);
+	}
+
 	fpc1020->iface_clk = clk_get(dev, "iface_clk");
 	if (IS_ERR(fpc1020->iface_clk)) {
 		dev_err(dev, "%s: Failed to get iface_clk\n", __func__);
@@ -1110,35 +888,36 @@ static int fpc1020_probe(struct spi_device *spi)
 		dev_info(dev, "found pin control %s\n", n);
 		fpc1020->pinctrl_state[i] = state;
 	}
-    
+
 	rc = select_pin_ctl(fpc1020, "fpc1020_reset_reset");
 	if (rc)
 		goto exit;
+
 	rc = select_pin_ctl(fpc1020, "fpc1020_cs_low");
-    dev_err(dev, "fpc1020_cs_low end rc=%d\n",rc);
 	if (rc)
 		goto exit;
+
 	rc = select_pin_ctl(fpc1020, "fpc1020_irq_active");
-    dev_err(dev, "fpc1020_irq_active end rc=%d\n",rc);
 	if (rc)
 		goto exit;
+
 	rc = select_pin_ctl(fpc1020, "fpc1020_spi_active");
-    dev_err(dev, "fpc1020_spi_active end rc=%d\n",rc);
-    if (rc)
+	if (rc)
 		goto exit;
-    rc = fpc1020_input_init(fpc1020);
-    if (rc)
+
+	rc = fpc1020_input_init(fpc1020);
+	if (rc)
 		goto exit;
 
 	INIT_WORK(&fpc1020->pm_work, fpc1020_suspend_resume);
 
-    #if defined(CONFIG_FB)
+#if defined(CONFIG_FB)
 	fpc1020->fb_notif.notifier_call = fb_notifier_callback;
 	rc = fb_register_client(&fpc1020->fb_notif);
-	if(rc)
+	if (rc)
 		dev_err(fpc1020->dev, "Unable to register fb_notifier: %d\n", rc);
-    fpc1020->screen_state = 1;
-    #endif
+	fpc1020->screen_state = 1;
+#endif
 
 	irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
 	mutex_init(&fpc1020->lock);
@@ -1152,10 +931,7 @@ static int fpc1020_probe(struct spi_device *spi)
 	}
 	dev_info(dev, "requested irq %d\n", gpio_to_irq(fpc1020->irq_gpio));
 
-	/* Request that the interrupt should not be wakeable */
-	//disable_irq_wake( gpio_to_irq( fpc1020->irq_gpio ) );
-
-	enable_irq_wake( gpio_to_irq( fpc1020->irq_gpio ) );
+	enable_irq_wake(gpio_to_irq(fpc1020->irq_gpio));
 	wake_lock_init(&fpc1020->ttw_wl, WAKE_LOCK_SUSPEND, "fpc_ttw_wl");
 	device_init_wakeup(fpc1020->dev, 1);
 
@@ -1166,29 +942,34 @@ static int fpc1020_probe(struct spi_device *spi)
 	}
 
 	rc = gpio_direction_output(fpc1020->rst_gpio, 1);
-	
 	if (rc) {
 		dev_err(fpc1020->dev,
 			"gpio_direction_output (reset) failed.\n");
 		goto exit;
 	}
+
 	gpio_set_value(fpc1020->rst_gpio, 1);
 	udelay(FPC1020_RESET_HIGH1_US);
-	
+
 	gpio_set_value(fpc1020->rst_gpio, 0);
 	udelay(FPC1020_RESET_LOW_US);
-	
+
 	gpio_set_value(fpc1020->rst_gpio, 1);
 	udelay(FPC1020_RESET_HIGH2_US);
-	
-    if(gpio_is_valid(fpc1020->fp2050_gpio))
-    {
-        push_component_info(FINGERPRINTS,"fpc1150" , gpio_get_value(fpc1020->fp2050_gpio)?(gpio_get_value(fpc1020->vendor_gpio)?"(FPC+2050)DT" : "(FPC+2050)CT"):(gpio_get_value(fpc1020->vendor_gpio)?"(FPC)DT" : "(FPC)CT"));
-    }
-    else
-    {
-        push_component_info(FINGERPRINTS,"fpc1150" , gpio_get_value(fpc1020->vendor_gpio)?"(FPC)DT" : "(FPC)CT");
-    }
+
+	if (gpio_is_valid(fpc1020->fp2050_gpio) && gpio_get_value(fpc1020->fp2050_gpio)) {
+		if (gpio_get_value(fpc1020->vendor_gpio)) {
+			push_component_info(FINGERPRINTS, "fpc1150", "(FPC+2050)DT");
+		} else {
+			push_component_info(FINGERPRINTS, "fpc1150", "(FPC+2050)CT");
+		}
+	} else {
+		if (gpio_get_value(fpc1020->vendor_gpio)) {
+			push_component_info(FINGERPRINTS, "fpc1150", "(FPC)DT");
+		} else {
+			push_component_info(FINGERPRINTS, "fpc1150", "(FPC)CT");
+		}
+	}
 
 	dev_info(dev, "%s: ok\n", __func__);
 exit:
@@ -1201,9 +982,9 @@ static int fpc1020_remove(struct spi_device *spi)
 
 	sysfs_remove_group(&spi->dev.kobj, &attribute_group);
 	mutex_destroy(&fpc1020->lock);
-	(void)vreg_setup(fpc1020, "vdd_io", false);
-	(void)vreg_setup(fpc1020, "vcc_spi", false);
-	(void)vreg_setup(fpc1020, "vdd_ana", false);
+	(void) vreg_setup(fpc1020, "vdd_io", false);
+	(void) vreg_setup(fpc1020, "vcc_spi", false);
+	(void) vreg_setup(fpc1020, "vdd_ana", false);
 	dev_info(&spi->dev, "%s\n", __func__);
 	return 0;
 }
